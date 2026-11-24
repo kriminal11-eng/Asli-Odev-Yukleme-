@@ -32,6 +32,7 @@
     .onay input { margin-top: 3px; }
     .makbuz { font: 600 22px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 2px; color: var(--ana-koyu); }
     @media (max-width: 420px) { .kademeler { grid-template-columns: repeat(2, 1fr); } }
+    .kilitli { opacity: .5; pointer-events: none; }
   </style>
 </head>
 <body data-kademe="<?= secKademe ?>" data-ders="<?= secDers ?>">
@@ -49,13 +50,14 @@
 
     <form id="form" class="gizli" novalidate>
       <section class="kart">
-        <h2>1. Kademe ve ders</h2>
+        <h2>1. Sınıf ve ders</h2>
         <div class="kademeler" id="kademeler"></div>
         <label for="ders">Ders</label>
-        <select id="ders" disabled><option value="">Önce kademe seçin</option></select>
+        <select id="ders" disabled><option value="">Önce sınıf seçin</option></select>
+        <div id="teslimBilgi"></div>
       </section>
 
-      <section class="kart">
+      <section class="kart kilitlenir">
         <h2>2. Bilgileriniz</h2>
         <label for="adSoyad">Ad Soyad</label>
         <input type="text" id="adSoyad" autocomplete="name" maxlength="80" required>
@@ -67,7 +69,7 @@
         <textarea id="aciklama" maxlength="1000" placeholder="Hocanıza iletmek istediğiniz kısa bir not"></textarea>
       </section>
 
-      <section class="kart">
+      <section class="kart kilitlenir">
         <h2>3. Dosyalar</h2>
         <div class="birak" id="birak" tabindex="0" role="button" aria-label="Dosya seç">
           <div><strong>Dosya seçmek için dokunun</strong> veya buraya sürükleyin</div>
@@ -77,7 +79,7 @@
         <ul class="dosyalar" id="dosyaListe"></ul>
       </section>
 
-      <section class="kart">
+      <section class="kart kilitlenir">
         <label class="onay">
           <input type="checkbox" id="kvkk">
           <span>Yüklediğim dosyaların ve kişisel bilgilerimin (ad soyad, öğrenci no, e-posta) yalnızca ders
@@ -103,7 +105,8 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var ayar = null, seciliKademe = null, dosyalar = [], gonderiliyor = false;
+  var ayar = null, seciliKademe = null, dosyalar = [], gonderiliyor = false, saatFarki = 0;
+  var TARIH = { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' };
 
   function sunucu(fn) {
     var args = Array.prototype.slice.call(arguments, 1);
@@ -132,6 +135,7 @@
   // ---------- Başlangıç ----------
   sunucu('dersleriGetir').then(function (v) {
     ayar = v;
+    saatFarki = new Date(v.simdi).getTime() - Date.now();
     $('yukleniyor').classList.add('gizli');
     $('form').classList.remove('gizli');
     $('kurallar').textContent = 'Word, PDF, ses (mp3…), video (mp4…) vb. · Dosya başına en fazla ' +
@@ -154,7 +158,8 @@
       b.className = 'kademe-btn';
       b.setAttribute('aria-pressed', 'false');
       b.dataset.kademe = k;
-      b.innerHTML = 'Kademe ' + k + '<small></small>';
+      b.innerHTML = '<span></span><small></small>';
+      b.querySelector('span').textContent = ayar.kademeAdlari[k];
       b.querySelector('small').textContent = ayar.kademeler[k].length + ' ders';
       b.addEventListener('click', function () { kademeSec(k); });
       kutu.appendChild(b);
@@ -170,8 +175,9 @@
     s.innerHTML = '';
     var liste = ayar.kademeler[k] || [];
     if (!liste.length) {
-      s.innerHTML = '<option value="">Bu kademede açık ders yok</option>';
+      s.innerHTML = '<option value="">Bu sınıfta açık ders yok</option>';
       s.disabled = true;
+      dersDegisti();
       return;
     }
     var bos = document.createElement('option');
@@ -179,16 +185,49 @@
     s.appendChild(bos);
     liste.forEach(function (d) {
       var o = document.createElement('option');
-      o.value = d.id; o.textContent = d.ad;
+      o.value = d.id;
+      o.textContent = d.ad + (dolduMu(d) ? ' (süresi doldu)' : '');
+      if (dolduMu(d)) o.disabled = true;
       s.appendChild(o);
     });
     s.disabled = false;
     if (dersId && liste.some(function (d) { return d.id === dersId; })) s.value = dersId;
+    dersDegisti();
   }
+
+  // ---------- Son teslim ----------
+  function simdi() { return Date.now() + saatFarki; }
+  function dolduMu(d) { return !!(d && (d.doldu || (d.sonTeslim && simdi() > new Date(d.sonTeslim).getTime()))); }
+  function seciliDers() {
+    var id = $('ders').value;
+    return (ayar.kademeler[seciliKademe] || []).filter(function (d) { return d.id === id; })[0] || null;
+  }
+  function kalanYaz(ms) {
+    var dk = Math.floor(ms / 60000), g = Math.floor(dk / 1440), s = Math.floor((dk % 1440) / 60), d = dk % 60;
+    if (g > 0) return g + ' gün ' + s + ' saat kaldı';
+    if (s > 0) return s + ' saat ' + d + ' dakika kaldı';
+    return d + ' dakika kaldı';
+  }
+  function dersDegisti() {
+    var d = seciliKademe ? seciliDers() : null, kutu = $('teslimBilgi');
+    var kilit = dolduMu(d);
+    Array.prototype.forEach.call(document.querySelectorAll('.kilitlenir'), function (el) { el.classList.toggle('kilitli', kilit); });
+    if (!d) return mesaj(kutu, '', '');
+    if (kilit) {
+      return mesaj(kutu, 'hata', 'Bu dersin son teslim tarihi (' + new Date(d.sonTeslim).toLocaleString('tr-TR', TARIH) +
+        ') geçti. Bu derse artık ödev yüklenemez.');
+    }
+    if (!d.sonTeslim) return mesaj(kutu, 'bilgi', 'Bu ders için son teslim tarihi belirlenmemiş.');
+    var kalan = new Date(d.sonTeslim).getTime() - simdi();
+    mesaj(kutu, kalan < 24 * 3600 * 1000 ? 'uyari' : 'bilgi', '⏰ Son teslim: ' +
+      new Date(d.sonTeslim).toLocaleString('tr-TR', TARIH) + ' (' + kalanYaz(kalan) + '). Bu saatten sonra yükleme yapılamaz.');
+  }
+  $('ders').addEventListener('change', dersDegisti);
+  setInterval(function () { if (ayar && seciliKademe && !gonderiliyor) dersDegisti(); }, 30000);
 
   // ---------- Dosya seçimi ----------
   var birak = $('birak');
-  birak.addEventListener('click', function () { if (!gonderiliyor) $('dosyaSec').click(); });
+  birak.addEventListener('click', function () { if (!gonderiliyor && !dolduMu(seciliDers())) $('dosyaSec').click(); });
   birak.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); birak.click(); } });
   ['dragenter', 'dragover'].forEach(function (t) {
     birak.addEventListener(t, function (e) { e.preventDefault(); birak.classList.add('uzerinde'); });
@@ -251,7 +290,7 @@
 
   function tekrarla(fn, kez) {
     return fn().catch(function (e) {
-      if (kez <= 1 || /süresi doldu|kabul etmiyor|geçersiz/i.test(e.message)) throw e;
+      if (kez <= 1 || /süresi doldu|kabul etmiyor|geçersiz|teslim tarihi/i.test(e.message)) throw e;
       return new Promise(function (c) { setTimeout(c, 1500); }).then(function () { return tekrarla(fn, kez - 1); });
     });
   }
@@ -302,8 +341,9 @@
       aciklama: $('aciklama').value.trim(),
       kvkk: $('kvkk').checked
     };
-    if (!seciliKademe) return mesaj(kutu, 'hata', 'Lütfen kademe seçin.');
+    if (!seciliKademe) return mesaj(kutu, 'hata', 'Lütfen sınıfınızı seçin.');
     if (!bilgi.dersId) return mesaj(kutu, 'hata', 'Lütfen ders seçin.');
+    if (dolduMu(seciliDers())) return mesaj(kutu, 'hata', 'Bu dersin son teslim tarihi geçti; yükleme yapılamaz.');
     if (bilgi.adSoyad.length < 3) return mesaj(kutu, 'hata', 'Lütfen adınızı ve soyadınızı yazın.');
     if (!/^[A-Za-z0-9]{3,20}$/.test(bilgi.ogrNo)) return mesaj(kutu, 'hata', 'Öğrenci numarası 3–20 harf/rakam olmalı.');
     if (bilgi.eposta && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bilgi.eposta)) return mesaj(kutu, 'hata', 'E-posta adresi geçersiz.');
@@ -344,6 +384,7 @@
       $('gonderBtn').textContent = 'Tekrar dene';
       Array.prototype.forEach.call($('form').querySelectorAll('input,select,textarea'), function (el) { el.disabled = false; });
       if (!seciliKademe || !(ayar.kademeler[seciliKademe] || []).length) $('ders').disabled = true;
+      dersDegisti();
       listeCiz();
       dosyalar.forEach(function (x) { if (x.durum === 'tamam') ilerleme(x, 1, 'tamam', 'Yüklendi ✓'); });
     });

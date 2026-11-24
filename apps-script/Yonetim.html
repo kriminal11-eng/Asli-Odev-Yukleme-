@@ -34,6 +34,12 @@
     .modal { background: #fff; border-radius: var(--yuvarlak); padding: 20px; width: 100%; max-width: 460px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
     .modal h3 { margin: 0 0 10px; }
     .modal .alt-butonlar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .rozet.doldu { background: var(--hata-acik); color: var(--hata); }
+    .teslim { font-size: 13px; color: var(--soluk); }
+    .teslim b { color: var(--metin); }
+    .ekle-form { display: grid; grid-template-columns: 1fr 220px auto; gap: 10px; align-items: end; }
+    .ekle-form label { margin-top: 0; }
+    @media (max-width: 700px) { .ekle-form { grid-template-columns: 1fr; } }
     .bildirim { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--metin); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; z-index: 20; max-width: calc(100% - 32px); }
   </style>
 </head>
@@ -128,6 +134,17 @@
     var d = new Date(iso);
     return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   }
+  var TARIH = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' };
+  function teslimYaz(iso) { return iso ? new Date(iso).toLocaleString('tr-TR', TARIH) : ''; }
+  // ISO -> datetime-local kutusu değeri (yerel saat)
+  function yerelDeger(iso) {
+    if (!iso) return '';
+    var d = new Date(iso), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  // datetime-local kutusu değeri -> ISO ('' ise '')
+  function isoDeger(v) { return v ? new Date(v).toISOString() : ''; }
+  function kademeAdi(k) { return (veri && veri.kademeAdlari && veri.kademeAdlari[k]) || ('Kademe ' + k); }
   function goster(id) {
     ['girisEkran', 'bekle', 'panel'].forEach(function (x) { $(x).classList.toggle('gizli', x !== id); });
     $('ustLinkler').classList.toggle('gizli', id !== 'panel');
@@ -258,7 +275,7 @@
       if (k === 'ayarlar') b.textContent = 'Ayarlar';
       else {
         var toplam = veri.kademeler[k].reduce(function (t, d) { return t + d.dosyaSayisi; }, 0);
-        b.innerHTML = 'Kademe ' + esc(k) + ' <span class="sayi">(' + veri.kademeler[k].length + ' ders · ' + toplam + ' dosya)</span>';
+        b.innerHTML = esc(kademeAdi(k)) + ' <span class="sayi">(' + veri.kademeler[k].length + ' ders · ' + toplam + ' dosya)</span>';
       }
       b.addEventListener('click', function () { aktifSekme = k; acikDers = null; ciz(); });
       nav.appendChild(b);
@@ -278,22 +295,27 @@
 
   function kademeCiz(k) {
     var dersler = veri.kademeler[k] || [];
-    var html = '<div class="kart"><h2>Kademe ' + esc(k) + ' — yeni ders / sınıf ekle</h2>' +
-      '<form id="ekleForm" class="satir"><input type="text" id="yeniDers" class="genis" maxlength="100" placeholder="Örn. Grupla Psikolojik Danışma - A Şubesi">' +
+    var html = '<div class="kart"><h2>' + esc(kademeAdi(k)) + ' — yeni ders ekle</h2>' +
+      '<form id="ekleForm" class="ekle-form">' +
+      '<div><label for="yeniDers">Ders adı</label><input type="text" id="yeniDers" maxlength="100" placeholder="Örn. Grupla Psikolojik Danışma - A Şubesi"></div>' +
+      '<div><label for="yeniTeslim">Son teslim <span class="ops">(isteğe bağlı)</span></label><input type="datetime-local" id="yeniTeslim"></div>' +
       '<button class="btn" type="submit">Ekle</button></form><div id="ekleMesaj"></div></div>';
     if (!dersler.length) {
-      html += '<div class="kart bos">Bu kademede henüz ders yok. Yukarıdan ekleyebilirsiniz.</div>';
+      html += '<div class="kart bos">Bu sınıfta henüz ders yok. Yukarıdan ekleyebilirsiniz.</div>';
     } else {
       html += '<div class="dersler">' + dersler.map(function (d) {
         return '<div class="kart ders" data-id="' + esc(d.id) + '">' +
           '<div class="satir" style="justify-content:space-between"><h3>' + esc(d.ad) + '</h3>' +
-          '<span class="rozet ' + (d.aktif ? 'acik' : 'kapali') + '">' + (d.aktif ? 'Ödev kabul ediyor' : 'Kapalı') + '</span></div>' +
+          (!d.aktif ? '<span class="rozet kapali">Kapalı</span>' : d.doldu ? '<span class="rozet doldu">Süresi doldu</span>' :
+            '<span class="rozet acik">Ödev kabul ediyor</span>') + '</div>' +
+          '<div class="teslim">Son teslim: ' + (d.sonTeslim ? '<b>' + esc(teslimYaz(d.sonTeslim)) + '</b>' : 'belirlenmedi') + '</div>' +
           '<div class="istat"><span><b>' + d.ogrenciSayisi + '</b>öğrenci</span><span><b>' + d.dosyaSayisi + '</b>dosya</span>' +
           '<span><b style="font-size:13px;margin-top:5px">' + esc(tarihYaz(d.sonGonderi)) + '</b>son gönderim</span></div>' +
           '<div class="islemler">' +
           '<button class="btn kucuk" data-islem="gor">Ödevleri gör</button>' +
           '<button class="btn kucuk ikincil" data-islem="link">Ders linki</button>' +
           '<a class="btn kucuk ikincil" target="_blank" rel="noopener" href="' + esc(d.klasorUrl) + '">Drive</a>' +
+          '<button class="btn kucuk ikincil" data-islem="teslim">Son teslim</button>' +
           '<button class="btn kucuk ikincil" data-islem="ad">Adı değiştir</button>' +
           '<button class="btn kucuk ikincil" data-islem="durum">' + (d.aktif ? 'Kapat' : 'Aç') + '</button>' +
           '<button class="btn kucuk tehlike" data-islem="sil">Sil</button>' +
@@ -305,9 +327,11 @@
     $('ekleForm').addEventListener('submit', function (e) {
       e.preventDefault();
       var ad = $('yeniDers').value.trim(), btn = this.querySelector('button');
+      var teslim = $('yeniTeslim').value;
       if (ad.length < 2) return mesaj($('ekleMesaj'), 'hata', 'Ders adı en az 2 karakter olmalı.');
+      if (teslim && new Date(teslim) < new Date()) return mesaj($('ekleMesaj'), 'hata', 'Son teslim tarihi geçmiş bir tarih olamaz.');
       btn.disabled = true;
-      yetkili('dersEkle', Number(k), ad).then(function () { bildir('Ders eklendi'); return yenile(); })
+      yetkili('dersEkle', Number(k), ad, isoDeger(teslim)).then(function () { bildir('Ders eklendi'); return yenile(); })
         .catch(function (err) { mesaj($('ekleMesaj'), 'hata', err.message); btn.disabled = false; });
     });
 
@@ -323,6 +347,20 @@
     if (islem === 'gor') { acikDers = d.id; return ciz(); }
     if (islem === 'link') {
       return linkGoster('“' + d.ad + '” ders linki', veri.uygulamaUrl + '?kademe=' + encodeURIComponent(k) + '&ders=' + encodeURIComponent(d.id));
+    }
+    if (islem === 'teslim') {
+      return modal('Son teslim tarihi', '<p class="soluk kucuk-yazi">“' + esc(d.ad) + '” için son teslim tarihini ve saatini seçin. ' +
+        'Bu andan sonra öğrenciler bu derse dosya yükleyemez.</p><input type="datetime-local" value="' + esc(yerelDeger(d.sonTeslim)) + '">', [
+        { yazi: 'Vazgeç', sinif: 'ikincil' },
+        { yazi: 'Tarihi kaldır', sinif: 'tehlike', islem: function () {
+          return yetkili('dersGuncelle', d.id, { sonTeslim: '' }).then(function () { bildir('Son teslim tarihi kaldırıldı'); return yenile(); });
+        } },
+        { yazi: 'Kaydet', islem: function (kap) {
+          var v = kap.querySelector('input').value;
+          if (!v) throw new Error('Lütfen tarih ve saat seçin.');
+          return yetkili('dersGuncelle', d.id, { sonTeslim: isoDeger(v) }).then(function () { bildir('Son teslim tarihi kaydedildi'); return yenile(); });
+        } }
+      ]);
     }
     if (islem === 'ad') {
       return modal('Adı değiştir', '<input type="text" maxlength="100" value="' + esc(d.ad) + '">', [
@@ -355,7 +393,8 @@
       '<div><button class="btn kucuk ikincil" id="geriBtn">← Dersler</button></div>' +
       '<div class="satir"><a class="btn kucuk ikincil" target="_blank" rel="noopener" href="' + esc(d.klasorUrl) + '">Tümünü Drive’da aç / ZIP indir</a>' +
       '<button class="btn kucuk ikincil" id="csvBtn">Listeyi indir (CSV)</button></div></div>' +
-      '<h2 style="margin-top:14px">Kademe ' + esc(aktifSekme) + ' · ' + esc(d.ad) + '</h2>' +
+      '<h2 style="margin-top:14px">' + esc(kademeAdi(aktifSekme)) + ' · ' + esc(d.ad) + '</h2>' +
+      (d.sonTeslim ? '<p class="teslim" style="margin-top:-6px">Son teslim: <b>' + esc(teslimYaz(d.sonTeslim)) + '</b>' + (d.doldu ? ' · süresi doldu' : '') + '</p>' : '') +
       '<input type="text" id="ara" placeholder="Öğrenci adı, numara veya dosya adı ile ara">' +
       '<div id="gonderiKutu" style="margin-top:12px"><div class="soluk"><span class="yukleniyor"></span> Ödevler yükleniyor…</div></div></div>';
     $('geriBtn').addEventListener('click', function () { acikDers = null; yenile(); });
@@ -426,7 +465,7 @@
     }).join('\r\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = 'Kademe' + aktifSekme + '_' + d.ad.replace(/[^\wğüşöçıİĞÜŞÖÇ -]/g, '') + '.csv';
+    a.download = kademeAdi(aktifSekme).replace(/[^\wğüşöçıİĞÜŞÖÇ -]/g, '') + '_' + d.ad.replace(/[^\wğüşöçıİĞÜŞÖÇ -]/g, '') + '.csv';
     document.body.appendChild(a); a.click(); a.remove();
   }
 
@@ -440,7 +479,7 @@
       '<div id="sifreMesaj"></div><button class="btn" type="submit" style="margin-top:14px">Şifreyi değiştir</button></form></div>' +
       '<div class="kart dar"><h2>Dosyalara bilgisayardan erişim</h2><p class="kucuk-yazi">Tüm ödevler Google Drive’ınızdaki ' +
       '<a target="_blank" rel="noopener" href="' + esc(veri.kokUrl) + '">“Ödev Yükleme Sistemi”</a> klasöründe ' +
-      '<b>Kademe → Ders → Öğrenci</b> düzeninde saklanır. Bilgisayarınıza <b>Google Drive masaüstü uygulamasını</b> kurarsanız ' +
+      '<b>Sınıf → Ders → Öğrenci</b> düzeninde saklanır. Bilgisayarınıza <b>Google Drive masaüstü uygulamasını</b> kurarsanız ' +
       'bu klasör Windows Gezgini’nde normal bir klasör gibi görünür ve yeni ödevler otomatik olarak iner.</p>' +
       '<p class="kucuk-yazi">Bir klasörün tamamını indirmek için Drive’da klasöre sağ tıklayıp <b>İndir</b> deyin; Drive ZIP olarak verir.</p></div>';
     $('sifreForm').addEventListener('submit', function (e) {

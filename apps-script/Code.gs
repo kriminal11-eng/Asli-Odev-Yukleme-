@@ -18,6 +18,7 @@ const AYAR = {
   KURUM: 'Trakya Üniversitesi · PDR',
   KOK_KLASOR_ADI: 'Ödev Yükleme Sistemi',
   KADEMELER: [1, 2, 3, 4],
+  KADEME_ADLARI: { 1: 'PDR 1. Sınıf', 2: 'PDR 2. Sınıf', 3: 'PDR 3. Sınıf', 4: 'PDR 4. Sınıf' },
   MAKS_DOSYA_MB: 1024,          // Tek dosya için üst sınır (MB)
   MAKS_DOSYA_SAYISI: 10,        // Tek gönderimde en fazla dosya
   IZINLI_UZANTILAR: [
@@ -36,7 +37,7 @@ const AYAR = {
 
 const SAYFA_DERSLER = 'Dersler';
 const SAYFA_GONDERILER = 'Gonderiler';
-const BASLIK_DERSLER = ['id', 'kademe', 'ad', 'klasorId', 'aktif', 'olusturma'];
+const BASLIK_DERSLER = ['id', 'kademe', 'ad', 'klasorId', 'aktif', 'olusturma', 'sonTeslim'];
 const BASLIK_GONDERILER = ['id', 'zaman', 'kademe', 'dersId', 'dersAd', 'adSoyad', 'ogrNo',
   'eposta', 'aciklama', 'dosyaAdi', 'dosyaId', 'boyut', 'durum', 'makbuz'];
 
@@ -108,6 +109,7 @@ function sayfa_(ad) {
 
 function satirlar_(ad) {
   const sh = sayfa_(ad);
+  basliklariTamamla_(sh, ad === SAYFA_DERSLER ? BASLIK_DERSLER : BASLIK_GONDERILER);
   const v = sh.getDataRange().getValues();
   const basliklar = v.shift();
   return v.map(function (r, i) {
@@ -117,6 +119,30 @@ function satirlar_(ad) {
   });
 }
 
+/** Eski sürümde oluşturulan tabloya yeni sütun başlıklarını ekler (ör. sonTeslim). */
+function basliklariTamamla_(sh, basliklar) {
+  const mevcut = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0];
+  basliklar.forEach(function (b, i) {
+    if (mevcut[i] !== b) sh.getRange(1, i + 1).setValue(b);
+  });
+}
+
+function kademeAdi_(k) {
+  return AYAR.KADEME_ADLARI[k] || ('Kademe ' + k);
+}
+
+/** Ders son teslim tarihi geçti mi? */
+function suresiDoldu_(d) {
+  return d.sonTeslim instanceof Date && new Date() > d.sonTeslim;
+}
+
+function tarihCoz_(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  const t = new Date(v);
+  if (isNaN(t.getTime())) throw new Error('Son teslim tarihi geçersiz.');
+  return t;
+}
+
 function hucreYaz_(ad, satir, alan, deger) {
   const basliklar = ad === SAYFA_DERSLER ? BASLIK_DERSLER : BASLIK_GONDERILER;
   sayfa_(ad).getRange(satir, basliklar.indexOf(alan) + 1).setValue(deger);
@@ -124,9 +150,12 @@ function hucreYaz_(ad, satir, alan, deger) {
 
 function kademeKlasoru_(kademe) {
   const kok = DriveApp.getFolderById(ayarlar_().kokId);
-  const ad = 'Kademe ' + kademe;
+  const ad = temizAd_(kademeAdi_(kademe));
   const it = kok.getFoldersByName(ad);
-  return it.hasNext() ? it.next() : kok.createFolder(ad);
+  if (it.hasNext()) return it.next();
+  const eski = kok.getFoldersByName('Kademe ' + kademe); // eski sürümden kalan klasörü yeniden adlandır
+  if (eski.hasNext()) { const f = eski.next(); f.setName(ad); return f; }
+  return kok.createFolder(ad);
 }
 
 function temizAd_(s) {
@@ -143,13 +172,21 @@ function dersBul_(id) {
 
 /** Öğrenci formu için yalnızca açık (aktif) dersleri döndürür. */
 function dersleriGetir() {
-  const sonuc = {};
-  AYAR.KADEMELER.forEach(function (k) { sonuc[k] = []; });
+  const sonuc = {}, adlar = {};
+  AYAR.KADEMELER.forEach(function (k) { sonuc[k] = []; adlar[k] = kademeAdi_(k); });
   satirlar_(SAYFA_DERSLER).forEach(function (d) {
-    if (d.aktif === true && sonuc[d.kademe]) sonuc[d.kademe].push({ id: String(d.id), ad: d.ad });
+    if (d.aktif === true && sonuc[d.kademe]) {
+      sonuc[d.kademe].push({
+        id: String(d.id), ad: d.ad,
+        sonTeslim: d.sonTeslim instanceof Date ? d.sonTeslim.toISOString() : null,
+        doldu: suresiDoldu_(d)
+      });
+    }
   });
   return {
     kademeler: sonuc,
+    kademeAdlari: adlar,
+    simdi: new Date().toISOString(),
     maksMB: AYAR.MAKS_DOSYA_MB,
     maksDosya: AYAR.MAKS_DOSYA_SAYISI,
     uzantilar: AYAR.IZINLI_UZANTILAR,
@@ -177,6 +214,7 @@ function yuklemeBaslat(b) {
   const ogr = ogrenciDogrula_(b);
   const ders = dersBul_(b.dersId);
   if (ders.aktif !== true) throw new Error('Bu ders şu anda ödev kabul etmiyor.');
+  if (suresiDoldu_(ders)) throw new Error('Bu dersin son teslim tarihi geçti; yükleme yapılamaz.');
 
   const dosyaAdi = temizAd_(b.dosyaAdi || '').slice(0, 150);
   const uzanti = (dosyaAdi.split('.').pop() || '').toLowerCase();
@@ -213,7 +251,7 @@ function yuklemeBaslat(b) {
     payload: JSON.stringify({
       name: kayitAdi,
       parents: [ogrKlasor.getId()],
-      description: 'Kademe ' + ders.kademe + ' · ' + ders.ad + '\n' + ogr.adSoyad + ' (' + ogr.ogrNo + ')' +
+      description: kademeAdi_(ders.kademe) + ' · ' + ders.ad + '\n' + ogr.adSoyad + ' (' + ogr.ogrNo + ')' +
         (ogr.eposta ? '\n' + ogr.eposta : '') + (ogr.aciklama ? '\n\n' + ogr.aciklama : '')
     }),
     muteHttpExceptions: true
@@ -366,8 +404,8 @@ function panelVerisi(anahtar) {
     s.ogrenci[String(g.ogrNo)] = true;
     if (!s.son || g.zaman > s.son) s.son = g.zaman;
   });
-  const kademeler = {};
-  AYAR.KADEMELER.forEach(function (k) { kademeler[k] = []; });
+  const kademeler = {}, adlar = {};
+  AYAR.KADEMELER.forEach(function (k) { kademeler[k] = []; adlar[k] = kademeAdi_(k); });
   satirlar_(SAYFA_DERSLER).forEach(function (d) {
     if (!kademeler[d.kademe]) return;
     const s = sayac[String(d.id)] || { dosya: 0, ogrenci: {}, son: null };
@@ -375,18 +413,21 @@ function panelVerisi(anahtar) {
       id: String(d.id), ad: d.ad, aktif: d.aktif === true,
       klasorUrl: 'https://drive.google.com/drive/folders/' + d.klasorId,
       dosyaSayisi: s.dosya, ogrenciSayisi: Object.keys(s.ogrenci).length,
-      sonGonderi: s.son ? s.son.toISOString() : null
+      sonGonderi: s.son ? s.son.toISOString() : null,
+      sonTeslim: d.sonTeslim instanceof Date ? d.sonTeslim.toISOString() : null,
+      doldu: suresiDoldu_(d)
     });
   });
   return {
     kademeler: kademeler,
+    kademeAdlari: adlar,
     kokUrl: 'https://drive.google.com/drive/folders/' + a.kokId,
     tabloUrl: 'https://docs.google.com/spreadsheets/d/' + a.tabloId,
     uygulamaUrl: ScriptApp.getService().getUrl()
   };
 }
 
-function dersEkle(anahtar, kademe, ad) {
+function dersEkle(anahtar, kademe, ad, sonTeslim) {
   yetki_(anahtar);
   kademe = Number(kademe);
   ad = temizAd_(ad || '').slice(0, 100);
@@ -396,9 +437,10 @@ function dersEkle(anahtar, kademe, ad) {
     return Number(d.kademe) === kademe && String(d.ad).toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr');
   });
   if (ayni) throw new Error('Bu kademede aynı adlı bir ders zaten var.');
+  const teslim = tarihCoz_(sonTeslim);
   const klasor = kademeKlasoru_(kademe).createFolder(ad);
   const id = Utilities.getUuid().slice(0, 8);
-  sayfa_(SAYFA_DERSLER).appendRow([id, kademe, ad, klasor.getId(), true, new Date()]);
+  sayfa_(SAYFA_DERSLER).appendRow([id, kademe, ad, klasor.getId(), true, new Date(), teslim]);
   return id;
 }
 
@@ -410,6 +452,9 @@ function dersGuncelle(anahtar, id, degisiklik) {
     if (ad.length < 2) throw new Error('Ders adı en az 2 karakter olmalı.');
     hucreYaz_(SAYFA_DERSLER, d._satir, 'ad', ad);
     DriveApp.getFolderById(d.klasorId).setName(ad);
+  }
+  if (degisiklik.sonTeslim !== undefined) {
+    hucreYaz_(SAYFA_DERSLER, d._satir, 'sonTeslim', tarihCoz_(degisiklik.sonTeslim));
   }
   if (degisiklik.aktif !== undefined) {
     hucreYaz_(SAYFA_DERSLER, d._satir, 'aktif', degisiklik.aktif === true);
