@@ -1,0 +1,99 @@
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --kart: #ffffff;
+    --metin: #1d2433;
+    --soluk: #5d6779;
+    --cizgi: #dfe3ea;
+    --ana: #1f4e8c;
+    --ana-koyu: #163a69;
+    --ana-acik: #e8eff9;
+    --basari: #1e7a46;
+    --basari-acik: #e5f4ec;
+    --hata: #b42318;
+    --hata-acik: #fdecea;
+    --uyari: #8a5a00;
+    --uyari-acik: #fff4dc;
+    --golge: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .1);
+    --yuvarlak: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--metin);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  a { color: var(--ana); }
+  .ust {
+    background: var(--ana);
+    color: #fff;
+    padding: 18px 16px;
+  }
+  .ust .ic { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .ust h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  .ust .alt { opacity: .85; font-size: 13px; }
+  .kap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+  .dar { max-width: 640px; }
+  .kart {
+    background: var(--kart);
+    border: 1px solid var(--cizgi);
+    border-radius: var(--yuvarlak);
+    box-shadow: var(--golge);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .kart h2 { margin: 0 0 12px; font-size: 17px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
+  label .ops { font-weight: 400; color: var(--soluk); }
+  input[type=text], input[type=email], input[type=password], select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--cizgi);
+    border-radius: 8px;
+    font: inherit;
+    background: #fff;
+    color: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--ana); outline-offset: 0; border-color: var(--ana); }
+  textarea { min-height: 70px; resize: vertical; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: 1px solid transparent;
+    background: var(--ana);
+    color: #fff;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font: inherit; font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--ana-koyu); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn.ikincil { background: #fff; color: var(--ana); border-color: var(--cizgi); }
+  .btn.ikincil:hover { background: var(--ana-acik); }
+  .btn.tehlike { background: #fff; color: var(--hata); border-color: #f1c1bc; }
+  .btn.tehlike:hover { background: var(--hata-acik); }
+  .btn.kucuk { padding: 6px 10px; font-size: 13px; }
+  .btn.tam { width: 100%; }
+  .mesaj { padding: 10px 12px; border-radius: 8px; margin: 12px 0; font-size: 14px; }
+  .mesaj.hata { background: var(--hata-acik); color: var(--hata); }
+  .mesaj.basari { background: var(--basari-acik); color: var(--basari); }
+  .mesaj.bilgi { background: var(--ana-acik); color: var(--ana-koyu); }
+  .mesaj.uyari { background: var(--uyari-acik); color: var(--uyari); }
+  .gizli { display: none !important; }
+  .soluk { color: var(--soluk); }
+  .kucuk-yazi { font-size: 13px; }
+  .satir { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .satir > .genis { flex: 1 1 220px; }
+  .rozet { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .rozet.acik { background: var(--basari-acik); color: var(--basari); }
+  .rozet.kapali { background: #eef0f3; color: var(--soluk); }
+  .yukleniyor { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: don .7s linear infinite; vertical-align: -3px; }
+  @keyframes don { to { transform: rotate(360deg); } }
+  @media (max-width: 520px) {
+    .kart { padding: 16px; }
+    .ust h1 { font-size: 18px; }
+  }
+</style>
