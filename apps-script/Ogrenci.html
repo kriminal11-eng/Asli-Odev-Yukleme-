@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include_('Stil'); ?>
+  <style>
+    .kademeler { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .kademe-btn {
+      border: 1px solid var(--cizgi); background: #fff; border-radius: 8px; padding: 12px 6px;
+      font: inherit; font-weight: 600; cursor: pointer; color: var(--metin);
+    }
+    .kademe-btn small { display: block; font-weight: 400; color: var(--soluk); font-size: 12px; }
+    .kademe-btn[aria-pressed=true] { background: var(--ana); color: #fff; border-color: var(--ana); }
+    .kademe-btn[aria-pressed=true] small { color: #dfe8f5; }
+    .birak {
+      border: 2px dashed var(--cizgi); border-radius: var(--yuvarlak); padding: 22px 16px; text-align: center;
+      cursor: pointer; background: #fafbfc; transition: background .15s, border-color .15s;
+    }
+    .birak.uzerinde { background: var(--ana-acik); border-color: var(--ana); }
+    .birak strong { color: var(--ana); }
+    .dosyalar { list-style: none; padding: 0; margin: 12px 0 0; }
+    .dosyalar li { border: 1px solid var(--cizgi); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+    .dosyalar .ust-satir { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .dosyalar .ad { word-break: break-all; font-size: 14px; }
+    .cubuk { height: 6px; background: #eef0f3; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+    .cubuk > div { height: 100%; width: 0; background: var(--ana); transition: width .2s; }
+    .cubuk.tamam > div { background: var(--basari); }
+    .cubuk.hatali > div { background: var(--hata); }
+    .x { border: 0; background: none; color: var(--soluk); font-size: 18px; cursor: pointer; line-height: 1; }
+    .onay { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; font-size: 13px; color: var(--soluk); }
+    .onay input { margin-top: 3px; }
+    .makbuz { font: 600 22px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 2px; color: var(--ana-koyu); }
+    @media (max-width: 420px) { .kademeler { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body data-kademe="<?= secKademe ?>" data-ders="<?= secDers ?>">
+  <header class="ust">
+    <div class="ic">
+      <div>
+        <h1><?= uygulamaAdi ?></h1>
+        <div class="alt"><?= kurum ?></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="kap dar">
+    <div id="yukleniyor" class="kart soluk"><span class="yukleniyor"></span> Dersler yükleniyor…</div>
+
+    <form id="form" class="gizli" novalidate>
+      <section class="kart">
+        <h2>1. Kademe ve ders</h2>
+        <div class="kademeler" id="kademeler"></div>
+        <label for="ders">Ders</label>
+        <select id="ders" disabled><option value="">Önce kademe seçin</option></select>
+      </section>
+
+      <section class="kart">
+        <h2>2. Bilgileriniz</h2>
+        <label for="adSoyad">Ad Soyad</label>
+        <input type="text" id="adSoyad" autocomplete="name" maxlength="80" required>
+        <label for="ogrNo">Öğrenci Numarası</label>
+        <input type="text" id="ogrNo" inputmode="numeric" maxlength="20" required>
+        <label for="eposta">E-posta <span class="ops">(isteğe bağlı)</span></label>
+        <input type="email" id="eposta" autocomplete="email" maxlength="120">
+        <label for="aciklama">Not <span class="ops">(isteğe bağlı)</span></label>
+        <textarea id="aciklama" maxlength="1000" placeholder="Hocanıza iletmek istediğiniz kısa bir not"></textarea>
+      </section>
+
+      <section class="kart">
+        <h2>3. Dosyalar</h2>
+        <div class="birak" id="birak" tabindex="0" role="button" aria-label="Dosya seç">
+          <div><strong>Dosya seçmek için dokunun</strong> veya buraya sürükleyin</div>
+          <div class="soluk kucuk-yazi" id="kurallar"></div>
+        </div>
+        <input type="file" id="dosyaSec" multiple class="gizli">
+        <ul class="dosyalar" id="dosyaListe"></ul>
+      </section>
+
+      <section class="kart">
+        <label class="onay">
+          <input type="checkbox" id="kvkk">
+          <span>Yüklediğim dosyaların ve kişisel bilgilerimin (ad soyad, öğrenci no, e-posta) yalnızca ders
+          değerlendirmesi amacıyla dersin öğretim elemanı tarafından saklanıp işleneceğini ve başka
+          öğrencilerle paylaşılmayacağını okudum, onaylıyorum.</span>
+        </label>
+        <div id="formMesaj"></div>
+        <button type="submit" class="btn tam" id="gonderBtn" style="margin-top:14px">Ödevi Gönder</button>
+      </section>
+    </form>
+
+    <section id="tamam" class="kart gizli">
+      <h2>Ödeviniz alındı ✓</h2>
+      <p>Dosyalarınız yalnızca öğretim elemanının erişebileceği şekilde kaydedildi.</p>
+      <p class="soluk kucuk-yazi" style="margin-bottom:4px">Gönderim kodunuz (ekran görüntüsü almanız önerilir):</p>
+      <div class="makbuz" id="makbuz"></div>
+      <ul class="dosyalar" id="tamamListe"></ul>
+      <button class="btn ikincil" id="yeniBtn" type="button">Yeni gönderim yap</button>
+    </section>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var ayar = null, seciliKademe = null, dosyalar = [], gonderiliyor = false;
+
+  function sunucu(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (coz, red) {
+      var r = google.script.run.withSuccessHandler(coz).withFailureHandler(function (e) {
+        red(new Error((e && e.message) || String(e)));
+      });
+      r[fn].apply(r, args);
+    });
+  }
+  function mesaj(kutu, tur, metin) {
+    kutu.innerHTML = '';
+    if (!metin) return;
+    var d = document.createElement('div');
+    d.className = 'mesaj ' + tur;
+    d.textContent = metin;
+    kutu.appendChild(d);
+  }
+  function boyutYaz(b) {
+    if (b < 1024 * 1024) return Math.max(1, Math.round(b / 1024)) + ' KB';
+    if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+    return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  }
+  function uzanti(ad) { var i = ad.lastIndexOf('.'); return i < 0 ? '' : ad.slice(i + 1).toLowerCase(); }
+
+  // ---------- Başlangıç ----------
+  sunucu('dersleriGetir').then(function (v) {
+    ayar = v;
+    $('yukleniyor').classList.add('gizli');
+    $('form').classList.remove('gizli');
+    $('kurallar').textContent = 'Word, PDF, ses (mp3…), video (mp4…) vb. · Dosya başına en fazla ' +
+      (v.maksMB >= 1024 ? (v.maksMB / 1024) + ' GB' : v.maksMB + ' MB') + ' · En fazla ' + v.maksDosya + ' dosya';
+    $('dosyaSec').setAttribute('accept', v.uzantilar.map(function (u) { return '.' + u; }).join(','));
+    kademeleriCiz();
+    var k = document.body.getAttribute('data-kademe');
+    if (k && ayar.kademeler[k]) kademeSec(k, document.body.getAttribute('data-ders'));
+  }).catch(function (e) {
+    $('yukleniyor').innerHTML = '';
+    mesaj($('yukleniyor'), 'hata', 'Sayfa yüklenemedi: ' + e.message);
+  });
+
+  function kademeleriCiz() {
+    var kutu = $('kademeler');
+    kutu.innerHTML = '';
+    Object.keys(ayar.kademeler).forEach(function (k) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'kademe-btn';
+      b.setAttribute('aria-pressed', 'false');
+      b.dataset.kademe = k;
+      b.innerHTML = 'Kademe ' + k + '<small></small>';
+      b.querySelector('small').textContent = ayar.kademeler[k].length + ' ders';
+      b.addEventListener('click', function () { kademeSec(k); });
+      kutu.appendChild(b);
+    });
+  }
+
+  function kademeSec(k, dersId) {
+    seciliKademe = k;
+    Array.prototype.forEach.call(document.querySelectorAll('.kademe-btn'), function (b) {
+      b.setAttribute('aria-pressed', b.dataset.kademe === String(k) ? 'true' : 'false');
+    });
+    var s = $('ders');
+    s.innerHTML = '';
+    var liste = ayar.kademeler[k] || [];
+    if (!liste.length) {
+      s.innerHTML = '<option value="">Bu kademede açık ders yok</option>';
+      s.disabled = true;
+      return;
+    }
+    var bos = document.createElement('option');
+    bos.value = ''; bos.textContent = 'Ders seçin';
+    s.appendChild(bos);
+    liste.forEach(function (d) {
+      var o = document.createElement('option');
+      o.value = d.id; o.textContent = d.ad;
+      s.appendChild(o);
+    });
+    s.disabled = false;
+    if (dersId && liste.some(function (d) { return d.id === dersId; })) s.value = dersId;
+  }
+
+  // ---------- Dosya seçimi ----------
+  var birak = $('birak');
+  birak.addEventListener('click', function () { if (!gonderiliyor) $('dosyaSec').click(); });
+  birak.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); birak.click(); } });
+  ['dragenter', 'dragover'].forEach(function (t) {
+    birak.addEventListener(t, function (e) { e.preventDefault(); birak.classList.add('uzerinde'); });
+  });
+  ['dragleave', 'drop'].forEach(function (t) {
+    birak.addEventListener(t, function (e) { e.preventDefault(); birak.classList.remove('uzerinde'); });
+  });
+  birak.addEventListener('drop', function (e) { if (!gonderiliyor) dosyaEkle(e.dataTransfer.files); });
+  $('dosyaSec').addEventListener('change', function () { dosyaEkle(this.files); this.value = ''; });
+
+  function dosyaEkle(liste) {
+    var hatalar = [];
+    Array.prototype.forEach.call(liste, function (f) {
+      if (ayar.uzantilar.indexOf(uzanti(f.name)) < 0) return hatalar.push(f.name + ': dosya türü kabul edilmiyor');
+      if (f.size === 0) return hatalar.push(f.name + ': dosya boş');
+      if (f.size > ayar.maksMB * 1024 * 1024) return hatalar.push(f.name + ': dosya çok büyük');
+      if (dosyalar.length >= ayar.maksDosya) return hatalar.push(f.name + ': en fazla ' + ayar.maksDosya + ' dosya');
+      if (dosyalar.some(function (x) { return x.dosya.name === f.name && x.dosya.size === f.size; })) return;
+      dosyalar.push({ dosya: f, durum: 'bekliyor' });
+    });
+    mesaj($('formMesaj'), 'hata', hatalar.join('\n'));
+    if (hatalar.length) $('formMesaj').firstChild.style.whiteSpace = 'pre-line';
+    listeCiz();
+  }
+
+  function listeCiz() {
+    var ul = $('dosyaListe');
+    ul.innerHTML = '';
+    dosyalar.forEach(function (x, i) {
+      var li = document.createElement('li');
+      li.innerHTML = '<div class="ust-satir"><span class="ad"></span><span class="satir"><span class="soluk kucuk-yazi bilgi"></span>' +
+        '<button type="button" class="x" title="Kaldır" aria-label="Kaldır">×</button></span></div><div class="cubuk"><div></div></div>';
+      li.querySelector('.ad').textContent = x.dosya.name;
+      li.querySelector('.bilgi').textContent = boyutYaz(x.dosya.size);
+      var xb = li.querySelector('.x');
+      if (gonderiliyor) xb.classList.add('gizli');
+      xb.addEventListener('click', function () { dosyalar.splice(i, 1); listeCiz(); });
+      x.li = li;
+      ul.appendChild(li);
+    });
+  }
+
+  function ilerleme(x, oran, tur, yazi) {
+    var c = x.li.querySelector('.cubuk');
+    c.firstChild.style.width = Math.round(oran * 100) + '%';
+    c.classList.toggle('tamam', tur === 'tamam');
+    c.classList.toggle('hatali', tur === 'hata');
+    if (yazi) x.li.querySelector('.bilgi').textContent = yazi;
+  }
+
+  // ---------- Gönderim ----------
+  function parcaOku(blob) {
+    return new Promise(function (coz, red) {
+      var r = new FileReader();
+      r.onload = function () { var s = r.result; coz(s.slice(s.indexOf(',') + 1)); };
+      r.onerror = function () { red(new Error('Dosya okunamadı.')); };
+      r.readAsDataURL(blob);
+    });
+  }
+
+  function tekrarla(fn, kez) {
+    return fn().catch(function (e) {
+      if (kez <= 1 || /süresi doldu|kabul etmiyor|geçersiz/i.test(e.message)) throw e;
+      return new Promise(function (c) { setTimeout(c, 1500); }).then(function () { return tekrarla(fn, kez - 1); });
+    });
+  }
+
+  function dosyaYukle(x, bilgi) {
+    var f = x.dosya;
+    ilerleme(x, 0.01, null, 'Başlatılıyor…');
+    var b = Object.assign({}, bilgi, { dosyaAdi: f.name, mimeType: f.type, boyut: f.size });
+    return tekrarla(function () { return sunucu('yuklemeBaslat', b); }, 3).then(function (r) {
+      var bas = 0;
+      function sonraki() {
+        var son = Math.min(bas + r.parcaBayt, f.size);
+        return parcaOku(f.slice(bas, son)).then(function (b64) {
+          var b0 = bas;
+          return tekrarla(function () { return sunucu('parcaGonder', r.yukId, b0, b64); }, 4);
+        }).then(function (sonuc) {
+          bas = son;
+          ilerleme(x, bas / f.size, null, Math.round(bas / f.size * 100) + '%');
+          if (sonuc.bitti) return;
+          if (bas >= f.size) throw new Error('Yükleme tamamlanamadı.');
+          return sonraki();
+        });
+      }
+      return sonraki();
+    }).then(function () {
+      x.durum = 'tamam';
+      ilerleme(x, 1, 'tamam', 'Yüklendi ✓');
+    });
+  }
+
+  function makbuzUret() {
+    var h = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
+    var r = new Uint32Array(8);
+    crypto.getRandomValues(r);
+    for (var i = 0; i < 8; i++) { s += h[r[i] % h.length]; if (i === 3) s += '-'; }
+    return s;
+  }
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (gonderiliyor) return;
+    var kutu = $('formMesaj');
+    var bilgi = {
+      dersId: $('ders').value,
+      adSoyad: $('adSoyad').value.trim(),
+      ogrNo: $('ogrNo').value.trim(),
+      eposta: $('eposta').value.trim(),
+      aciklama: $('aciklama').value.trim(),
+      kvkk: $('kvkk').checked
+    };
+    if (!seciliKademe) return mesaj(kutu, 'hata', 'Lütfen kademe seçin.');
+    if (!bilgi.dersId) return mesaj(kutu, 'hata', 'Lütfen ders seçin.');
+    if (bilgi.adSoyad.length < 3) return mesaj(kutu, 'hata', 'Lütfen adınızı ve soyadınızı yazın.');
+    if (!/^[A-Za-z0-9]{3,20}$/.test(bilgi.ogrNo)) return mesaj(kutu, 'hata', 'Öğrenci numarası 3–20 harf/rakam olmalı.');
+    if (bilgi.eposta && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bilgi.eposta)) return mesaj(kutu, 'hata', 'E-posta adresi geçersiz.');
+    var bekleyen = dosyalar.filter(function (x) { return x.durum !== 'tamam'; });
+    if (!dosyalar.length) return mesaj(kutu, 'hata', 'Lütfen en az bir dosya seçin.');
+    if (!bilgi.kvkk) return mesaj(kutu, 'hata', 'Gönderebilmek için onay kutusunu işaretleyin.');
+
+    bilgi.makbuz = bilgi.makbuz || window.__makbuz || (window.__makbuz = makbuzUret());
+    gonderiliyor = true;
+    $('gonderBtn').disabled = true;
+    $('gonderBtn').innerHTML = '<span class="yukleniyor"></span> Yükleniyor… sayfayı kapatmayın';
+    Array.prototype.forEach.call($('form').querySelectorAll('input,select,textarea'), function (el) { el.disabled = true; });
+    listeCiz();
+    dosyalar.forEach(function (x) { if (x.durum === 'tamam') ilerleme(x, 1, 'tamam', 'Yüklendi ✓'); });
+    mesaj(kutu, 'bilgi', 'Dosyalarınız yükleniyor. Büyük videolar birkaç dakika sürebilir.');
+
+    var zincir = Promise.resolve();
+    bekleyen.forEach(function (x) { zincir = zincir.then(function () { return dosyaYukle(x, bilgi); }); });
+    zincir.then(function () {
+      $('form').classList.add('gizli');
+      $('tamam').classList.remove('gizli');
+      $('makbuz').textContent = bilgi.makbuz;
+      var ul = $('tamamListe');
+      ul.innerHTML = '';
+      dosyalar.forEach(function (x) {
+        var li = document.createElement('li');
+        li.textContent = '✓ ' + x.dosya.name + ' (' + boyutYaz(x.dosya.size) + ')';
+        ul.appendChild(li);
+      });
+      window.onbeforeunload = null;
+      window.scrollTo(0, 0);
+    }).catch(function (err) {
+      dosyalar.forEach(function (x) { if (x.durum !== 'tamam' && x.li) ilerleme(x, 1, 'hata', 'Hata'); });
+      mesaj(kutu, 'hata', err.message + ' — Yüklenen dosyalar kaydedildi; "Tekrar dene" ile kalanları gönderebilirsiniz.');
+    }).then(function () {
+      gonderiliyor = false;
+      $('gonderBtn').disabled = false;
+      $('gonderBtn').textContent = 'Tekrar dene';
+      Array.prototype.forEach.call($('form').querySelectorAll('input,select,textarea'), function (el) { el.disabled = false; });
+      if (!seciliKademe || !(ayar.kademeler[seciliKademe] || []).length) $('ders').disabled = true;
+      listeCiz();
+      dosyalar.forEach(function (x) { if (x.durum === 'tamam') ilerleme(x, 1, 'tamam', 'Yüklendi ✓'); });
+    });
+    window.onbeforeunload = function () { return 'Yükleme devam ediyor.'; };
+  });
+
+  $('yeniBtn').addEventListener('click', function () {
+    dosyalar = [];
+    window.__makbuz = null;
+    listeCiz();
+    $('aciklama').value = '';
+    $('kvkk').checked = false;
+    $('gonderBtn').textContent = 'Ödevi Gönder';
+    mesaj($('formMesaj'), '', '');
+    $('tamam').classList.add('gizli');
+    $('form').classList.remove('gizli');
+  });
+})();
+</script>
+</body>
+</html>
